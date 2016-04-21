@@ -1,7 +1,10 @@
 package graphql
 
 import (
+	"log"
+
 	"github.com/graphql-go/graphql/gqlerrors"
+	"github.com/graphql-go/graphql/language/ast"
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"
 	"golang.org/x/net/context"
@@ -32,17 +35,27 @@ type Params struct {
 	Context context.Context
 }
 
+var cachedASTs map[string]*ast.Document = make(map[string]*ast.Document)
+
 func Do(p Params) *Result {
-	source := source.NewSource(&source.Source{
-		Body: p.RequestString,
-		Name: "GraphQL request",
-	})
-	AST, err := parser.Parse(parser.ParseParams{Source: source})
-	if err != nil {
-		return &Result{
-			Errors: gqlerrors.FormatErrors(err),
+	var AST *ast.Document
+	var ok bool
+	var err error
+	if AST, ok = cachedASTs[p.RequestString]; !ok {
+		log.Printf("No cached AST.  parsing new one...")
+		source := source.NewSource(&source.Source{
+			Body: p.RequestString,
+			Name: "GraphQL request",
+		})
+		AST, err = parser.Parse(parser.ParseParams{Source: source})
+		if err != nil {
+			return &Result{
+				Errors: gqlerrors.FormatErrors(err),
+			}
 		}
+		cachedASTs[p.RequestString] = AST
 	}
+
 	validationResult := ValidateDocument(&p.Schema, AST, nil)
 
 	if !validationResult.IsValid {
