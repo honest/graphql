@@ -1,8 +1,6 @@
 package graphql
 
 import (
-	"log"
-
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
 	"github.com/graphql-go/graphql/language/parser"
@@ -33,6 +31,10 @@ type Params struct {
 	// Context may be provided to pass application-specific per-request
 	// information to resolve functions.
 	Context context.Context
+
+	// SkipValidation allows skipping validation of the GraphQL request.
+	// Should only be used with trusted clients for the performance benefits.
+	SkipValidation bool
 }
 
 var cachedASTs map[string]*ast.Document = make(map[string]*ast.Document)
@@ -42,7 +44,6 @@ func Do(p Params) *Result {
 	var ok bool
 	var err error
 	if AST, ok = cachedASTs[p.RequestString]; !ok {
-		log.Printf("No cached AST.  parsing new one...")
 		source := source.NewSource(&source.Source{
 			Body: p.RequestString,
 			Name: "GraphQL request",
@@ -56,11 +57,13 @@ func Do(p Params) *Result {
 		cachedASTs[p.RequestString] = AST
 	}
 
-	validationResult := ValidateDocument(&p.Schema, AST, nil)
+	if !p.SkipValidation {
+		validationResult := ValidateDocument(&p.Schema, AST, nil)
 
-	if !validationResult.IsValid {
-		return &Result{
-			Errors: validationResult.Errors,
+		if !validationResult.IsValid {
+			return &Result{
+				Errors: validationResult.Errors,
+			}
 		}
 	}
 
