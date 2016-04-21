@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
@@ -248,18 +249,31 @@ func executeFields(p ExecuteFieldsParams) *Result {
 	}
 
 	finalResults := map[string]interface{}{}
+	var mutex = &sync.Mutex{}
+	var wg sync.WaitGroup
 	for responseName, fieldASTs := range p.Fields {
-		resolved, state := resolveField(p.ExecutionContext, p.ParentType, p.Source, fieldASTs)
-		if state.hasNoFieldDefs {
-			continue
-		}
-		finalResults[responseName] = resolved
+		wg.Add(1)
+		go func(responseName string, fieldASTs []*ast.Field) {
+			defer wg.Done()
+			resolved, state := resolveField(p.ExecutionContext, p.ParentType, p.Source, fieldASTs)
+			if !state.hasNoFieldDefs {
+				mutex.Lock()
+				finalResults[responseName] = resolved
+				mutex.Unlock()
+			}
+		}(responseName, fieldASTs)
 	}
 
-	return &Result{
-		Data:   finalResults,
-		Errors: p.ExecutionContext.Errors,
-	}
+	resultChan := make(chan *Result)
+	go func() {
+		wg.Wait()
+		resultChan <- &Result{
+			Data:   finalResults,
+			Errors: p.ExecutionContext.Errors,
+		}
+	}()
+
+	return <-resultChan
 }
 
 type CollectFieldsParams struct {
