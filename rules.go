@@ -2,13 +2,14 @@ package graphql
 
 import (
 	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
 	"github.com/graphql-go/graphql/language/kinds"
 	"github.com/graphql-go/graphql/language/printer"
 	"github.com/graphql-go/graphql/language/visitor"
-	"sort"
-	"strings"
 )
 
 // SpecifiedRules set includes all validation rules defined by the GraphQL spec.
@@ -2100,16 +2101,16 @@ func isValidLiteralValue(ttype Input, valueAST ast.Value) (bool, []string) {
 		return (len(messagesReduce) == 0), messagesReduce
 	}
 
-	if ttype, ok := ttype.(*Scalar); ok {
-		if isNullish(ttype.ParseLiteral(valueAST)) {
-			return false, []string{fmt.Sprintf(`Expected type "%v", found %v.`, ttype.Name(), printer.Print(valueAST))}
-		}
-	}
-	if ttype, ok := ttype.(*Enum); ok {
-		if isNullish(ttype.ParseLiteral(valueAST)) {
-			return false, []string{fmt.Sprintf(`Expected type "%v", found %v.`, ttype.Name(), printer.Print(valueAST))}
-		}
-	}
+	// if ttype, ok := ttype.(*Scalar); ok {
+	// 	if isNullish(ttype.ParseLiteral(valueAST)) {
+	// 		return false, []string{fmt.Sprintf(`Expected type "%v", found %v.`, ttype.Name(), printer.Print(valueAST))}
+	// 	}
+	// }
+	// if ttype, ok := ttype.(*Enum); ok {
+	// 	if isNullish(ttype.ParseLiteral(valueAST)) {
+	// 		return false, []string{fmt.Sprintf(`Expected type "%v", found %v.`, ttype.Name(), printer.Print(valueAST))}
+	// 	}
+	// }
 
 	return true, nil
 }
