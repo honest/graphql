@@ -7,11 +7,12 @@ import (
 	"reflect"
 	"strings"
 
+	"sort"
+
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
 	"github.com/graphql-go/graphql/language/kinds"
 	"github.com/graphql-go/graphql/language/printer"
-	"sort"
 )
 
 // Prepares an object map of variableValues of the correct type based on the
@@ -414,9 +415,9 @@ func valueFromAST(valueAST ast.Value, ttype Input, variables map[string]interfac
 			if isNullish(fieldValue) {
 				fieldValue = field.DefaultValue
 			}
-			if !isNullish(fieldValue) {
-				obj[fieldName] = fieldValue
-			}
+			//if !isNullish(fieldValue) {
+			obj[fieldName] = fieldValue
+			//}
 		}
 		return obj
 	}
