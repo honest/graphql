@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"errors"
+	"runtime/debug"
 	"fmt"
 	"reflect"
 	"strings"
@@ -508,6 +509,12 @@ func resolveField(eCtx *ExecutionContext, parentType *Object, source interface{}
 				panic(gqlerrors.FormatError(err))
 			}
 			eCtx.Errors = append(eCtx.Errors, gqlerrors.FormatError(err))
+
+			fmt.Printf("----------------------------------------------\n")
+			fmt.Printf("Error: %s\n", err)
+			fmt.Printf("Trace: %s\n", debug.Stack())
+			fmt.Printf("----------------------------------------------\n")
+
 			return result, resultState
 		}
 		return result, resultState
