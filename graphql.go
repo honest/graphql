@@ -35,6 +35,9 @@ type Params struct {
 	// SkipValidation allows skipping validation of the GraphQL request.
 	// Should only be used with trusted clients for the performance benefits.
 	SkipValidation bool
+
+	// CustomValidationRules are extra validators to run after the AST has been parsed.  These follow a visitor pattern that can be upon entry or exit from each node.
+	CustomValidationRules []func(context *ValidationContext) *ValidationRuleInstance
 }
 
 var cachedASTs map[string]*ast.Document = make(map[string]*ast.Document)
@@ -58,7 +61,13 @@ func Do(p Params) *Result {
 	}
 
 	if !p.SkipValidation {
-		validationResult := ValidateDocument(&p.Schema, AST, nil)
+		rules := SpecifiedRules
+		if p.CustomValidationRules != nil {
+			for _, rule := range p.CustomValidationRules {
+				rules = append(rules, rule)
+			}
+		}
+		validationResult := ValidateDocument(&p.Schema, AST, rules)
 
 		if !validationResult.IsValid {
 			return &Result{
