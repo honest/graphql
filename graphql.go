@@ -38,6 +38,9 @@ type Params struct {
 
 	// CustomValidationRules are extra validators to run after the AST has been parsed.  These follow a visitor pattern that can be upon entry or exit from each node.
 	CustomValidationRules []func(context *ValidationContext) *ValidationRuleInstance
+
+	// ErrorHandlerFn expects an error handler
+	ErrorHandlerFn func(err error)
 }
 
 var cachedASTs map[string]*ast.Document = make(map[string]*ast.Document)
@@ -77,11 +80,12 @@ func Do(p Params) *Result {
 	}
 
 	return Execute(ExecuteParams{
-		Schema:        p.Schema,
-		Root:          p.RootObject,
-		AST:           AST,
-		OperationName: p.OperationName,
-		Args:          p.VariableValues,
-		Context:       p.Context,
+		Schema:         p.Schema,
+		Root:           p.RootObject,
+		AST:            AST,
+		OperationName:  p.OperationName,
+		Args:           p.VariableValues,
+		Context:        p.Context,
+		ErrorHandlerFn: p.ErrorHandlerFn,
 	})
 }
