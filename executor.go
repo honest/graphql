@@ -2,7 +2,6 @@ package graphql
 
 import (
 	"errors"
-	"runtime/debug"
 	"fmt"
 	"reflect"
 	"strings"
@@ -23,20 +22,23 @@ type ExecuteParams struct {
 	// Context may be provided to pass application-specific per-request
 	// information to resolve functions.
 	Context context.Context
+
+	ErrorHandlerFn func(err error)
 }
 
 func Execute(p ExecuteParams) (result *Result) {
 	result = &Result{}
 
 	exeContext, err := buildExecutionContext(BuildExecutionCtxParams{
-		Schema:        p.Schema,
-		Root:          p.Root,
-		AST:           p.AST,
-		OperationName: p.OperationName,
-		Args:          p.Args,
-		Errors:        nil,
-		Result:        result,
-		Context:       p.Context,
+		Schema:         p.Schema,
+		Root:           p.Root,
+		AST:            p.AST,
+		OperationName:  p.OperationName,
+		Args:           p.Args,
+		Errors:         nil,
+		ErrorHandlerFn: p.ErrorHandlerFn,
+		Result:         result,
+		Context:        p.Context,
 	})
 
 	if err != nil {
@@ -63,14 +65,15 @@ func Execute(p ExecuteParams) (result *Result) {
 }
 
 type BuildExecutionCtxParams struct {
-	Schema        Schema
-	Root          interface{}
-	AST           *ast.Document
-	OperationName string
-	Args          map[string]interface{}
-	Errors        []gqlerrors.FormattedError
-	Result        *Result
-	Context       context.Context
+	Schema         Schema
+	Root           interface{}
+	AST            *ast.Document
+	OperationName  string
+	Args           map[string]interface{}
+	Errors         []gqlerrors.FormattedError
+	ErrorHandlerFn func(err error)
+	Result         *Result
+	Context        context.Context
 }
 type ExecutionContext struct {
 	Schema         Schema
@@ -79,6 +82,7 @@ type ExecutionContext struct {
 	Operation      ast.Definition
 	VariableValues map[string]interface{}
 	Errors         []gqlerrors.FormattedError
+	ErrorHandlerFn func(err error)
 	Context        context.Context
 }
 
@@ -126,6 +130,7 @@ func buildExecutionContext(p BuildExecutionCtxParams) (*ExecutionContext, error)
 	eCtx.Operation = operation
 	eCtx.VariableValues = variableValues
 	eCtx.Errors = p.Errors
+	eCtx.ErrorHandlerFn = p.ErrorHandlerFn
 	eCtx.Context = p.Context
 	return eCtx, nil
 }
@@ -501,6 +506,10 @@ func resolveField(eCtx *ExecutionContext, parentType *Object, source interface{}
 					FieldASTsToNodeASTs(fieldASTs),
 				)
 			}
+			if eCtx.ErrorHandlerFn != nil {
+				eCtx.ErrorHandlerFn(err)
+			}
+
 			if r, ok := r.(error); ok {
 				err = gqlerrors.FormatError(r)
 			}
@@ -509,11 +518,6 @@ func resolveField(eCtx *ExecutionContext, parentType *Object, source interface{}
 				panic(gqlerrors.FormatError(err))
 			}
 			eCtx.Errors = append(eCtx.Errors, gqlerrors.FormatError(err))
-
-			fmt.Printf("----------------------------------------------\n")
-			fmt.Printf("Error: %s\n", err)
-			fmt.Printf("Trace: %s\n", debug.Stack())
-			fmt.Printf("----------------------------------------------\n")
 
 			return result, resultState
 		}
