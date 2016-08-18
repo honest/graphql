@@ -13,12 +13,59 @@ type Test struct {
 }
 
 func createSource(body string) *source.Source {
-	return source.NewSource(&source.Source{Body: body})
+	return source.NewSource(&source.Source{Body: []byte(body)})
 }
 
-func TestDisallowsUncommonControlCharacters(t *testing.T) {
+func TestLexer_GetTokenDesc(t *testing.T) {
+	expected := `Name "foo"`
+	tokenDescription := GetTokenDesc(Token{
+		Kind:  TokenKind[NAME],
+		Start: 2,
+		End:   5,
+		Value: "foo",
+	})
+	if expected != tokenDescription {
+		t.Errorf("Expected %v, got %v", expected, tokenDescription)
+	}
+
+	expected = `Name`
+	tokenDescription = GetTokenDesc(Token{
+		Kind:  TokenKind[NAME],
+		Start: 0,
+		End:   0,
+		Value: "",
+	})
+	if expected != tokenDescription {
+		t.Errorf("Expected %v, got %v", expected, tokenDescription)
+	}
+
+	expected = `String "foo"`
+	tokenDescription = GetTokenDesc(Token{
+		Kind:  TokenKind[STRING],
+		Start: 2,
+		End:   5,
+		Value: "foo",
+	})
+	if expected != tokenDescription {
+		t.Errorf("Expected %v, got %v", expected, tokenDescription)
+	}
+
+	expected = `String`
+	tokenDescription = GetTokenDesc(Token{
+		Kind:  TokenKind[STRING],
+		Start: 0,
+		End:   0,
+		Value: "",
+	})
+	if expected != tokenDescription {
+		t.Errorf("Expected %v, got %v", expected, tokenDescription)
+	}
+
+}
+
+func TestLexer_DisallowsUncommonControlCharacters(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
 			Body: "\u0007",
 			Expected: `Syntax Error GraphQL (1:1) Invalid character "\\u0007"
 
@@ -30,17 +77,17 @@ func TestDisallowsUncommonControlCharacters(t *testing.T) {
 	for _, test := range tests {
 		_, err := Lex(createSource(test.Body))(0)
 		if err == nil {
-			t.Fatalf("unexpected nil error\nexpected:\n%v\n\ngot:\n%v", test.Expected, err)
+			t.Errorf("unexpected nil error\nexpected:\n%v\n\ngot:\n%v", test.Expected, err)
 		}
 		if err.Error() != test.Expected {
-			t.Fatalf("unexpected error.\nexpected:\n%v\n\ngot:\n%v", test.Expected, err.Error())
+			t.Errorf("unexpected error.\nexpected:\n%v\n\ngot:\n%v", test.Expected, err.Error())
 		}
 	}
 }
 
-func TestAcceptsBOMHeader(t *testing.T) {
+func TestLexer_AcceptsBOMHeader(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
 			Body: "\uFEFF foo",
 			Expected: Token{
 				Kind:  TokenKind[NAME],
@@ -51,19 +98,19 @@ func TestAcceptsBOMHeader(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		token, err := Lex(&source.Source{Body: test.Body})(0)
+		token, err := Lex(&source.Source{Body: []byte(test.Body)})(0)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Errorf("unexpected error: %v", err)
 		}
 		if !reflect.DeepEqual(token, test.Expected) {
-			t.Fatalf("unexpected token, expected: %v, got: %v", test.Expected, token)
+			t.Errorf("unexpected token, expected: %v, got: %v", test.Expected, token)
 		}
 	}
 }
 
-func TestSkipsWhiteSpace(t *testing.T) {
+func TestLexer_SkipsWhiteSpace(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
 			Body: `
 
     foo
@@ -76,7 +123,7 @@ func TestSkipsWhiteSpace(t *testing.T) {
 				Value: "foo",
 			},
 		},
-		Test{
+		{
 			Body: `
     #comment
     foo#comment
@@ -88,7 +135,7 @@ func TestSkipsWhiteSpace(t *testing.T) {
 				Value: "foo",
 			},
 		},
-		Test{
+		{
 			Body: `,,,foo,,,`,
 			Expected: Token{
 				Kind:  TokenKind[NAME],
@@ -97,19 +144,28 @@ func TestSkipsWhiteSpace(t *testing.T) {
 				Value: "foo",
 			},
 		},
+		{
+			Body: ``,
+			Expected: Token{
+				Kind:  TokenKind[EOF],
+				Start: 0,
+				End:   0,
+				Value: "",
+			},
+		},
 	}
 	for _, test := range tests {
-		token, err := Lex(&source.Source{Body: test.Body})(0)
+		token, err := Lex(&source.Source{Body: []byte(test.Body)})(0)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Errorf("unexpected error: %v", err)
 		}
 		if !reflect.DeepEqual(token, test.Expected) {
-			t.Fatalf("unexpected token, expected: %v, got: %v, body: %s", test.Expected, token, test.Body)
+			t.Errorf("unexpected token, expected: %v, got: %v, body: %s", test.Expected, token, test.Body)
 		}
 	}
 }
 
-func TestErrorsRespectWhitespace(t *testing.T) {
+func TestLexer_ErrorsRespectWhitespace(t *testing.T) {
 	body := `
 
     ?
@@ -125,9 +181,41 @@ func TestErrorsRespectWhitespace(t *testing.T) {
 	}
 }
 
-func TestLexesStrings(t *testing.T) {
+func TestLexer_LexesNames(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
+			Body: "simple",
+			Expected: Token{
+				Kind:  TokenKind[NAME],
+				Start: 0,
+				End:   6,
+				Value: "simple",
+			},
+		},
+		{
+			Body: "Capital",
+			Expected: Token{
+				Kind:  TokenKind[NAME],
+				Start: 0,
+				End:   7,
+				Value: "Capital",
+			},
+		},
+	}
+	for _, test := range tests {
+		token, err := Lex(&source.Source{Body: []byte(test.Body)})(0)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(token, test.Expected) {
+			t.Errorf("unexpected token, expected: %v, got: %v", test.Expected, token)
+		}
+	}
+}
+
+func TestLexer_LexesStrings(t *testing.T) {
+	tests := []Test{
+		{
 			Body: "\"simple\"",
 			Expected: Token{
 				Kind:  TokenKind[STRING],
@@ -136,7 +224,7 @@ func TestLexesStrings(t *testing.T) {
 				Value: "simple",
 			},
 		},
-		Test{
+		{
 			Body: "\" white space \"",
 			Expected: Token{
 				Kind:  TokenKind[STRING],
@@ -145,7 +233,7 @@ func TestLexesStrings(t *testing.T) {
 				Value: " white space ",
 			},
 		},
-		Test{
+		{
 			Body: "\"quote \\\"\"",
 			Expected: Token{
 				Kind:  TokenKind[STRING],
@@ -154,7 +242,7 @@ func TestLexesStrings(t *testing.T) {
 				Value: `quote "`,
 			},
 		},
-		Test{
+		{
 			Body: "\"escaped \\n\\r\\b\\t\\f\"",
 			Expected: Token{
 				Kind:  TokenKind[STRING],
@@ -163,16 +251,16 @@ func TestLexesStrings(t *testing.T) {
 				Value: "escaped \n\r\b\t\f",
 			},
 		},
-		Test{
+		{
 			Body: "\"slashes \\\\ \\/\"",
 			Expected: Token{
 				Kind:  TokenKind[STRING],
 				Start: 0,
 				End:   15,
-				Value: "slashes \\ \\/",
+				Value: "slashes \\ /",
 			},
 		},
-		Test{
+		{
 			Body: "\"unicode \\u1234\\u5678\\u90AB\\uCDEF\"",
 			Expected: Token{
 				Kind:  TokenKind[STRING],
@@ -181,21 +269,48 @@ func TestLexesStrings(t *testing.T) {
 				Value: "unicode \u1234\u5678\u90AB\uCDEF",
 			},
 		},
+		{
+			Body: "\"unicode фы世界\"",
+			Expected: Token{
+				Kind:  TokenKind[STRING],
+				Start: 0,
+				End:   20,
+				Value: "unicode фы世界",
+			},
+		},
+		{
+			Body: "\"фы世界\"",
+			Expected: Token{
+				Kind:  TokenKind[STRING],
+				Start: 0,
+				End:   12,
+				Value: "фы世界",
+			},
+		},
+		{
+			Body: "\"Has a фы世界 multi-byte character.\"",
+			Expected: Token{
+				Kind:  TokenKind[STRING],
+				Start: 0,
+				End:   40,
+				Value: "Has a фы世界 multi-byte character.",
+			},
+		},
 	}
 	for _, test := range tests {
-		token, err := Lex(&source.Source{Body: test.Body})(0)
+		token, err := Lex(&source.Source{Body: []byte(test.Body)})(0)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Errorf("unexpected error: %v", err)
 		}
 		if !reflect.DeepEqual(token, test.Expected) {
-			t.Fatalf("unexpected token, expected: %v, got: %v", test.Expected, token)
+			t.Errorf("unexpected token, expected: %v, got: %v", test.Expected, token)
 		}
 	}
 }
 
-func TestLexReportsUsefulStringErrors(t *testing.T) {
+func TestLexer_ReportsUsefulStringErrors(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
 			Body: "\"",
 			Expected: `Syntax Error GraphQL (1:2) Unterminated string.
 
@@ -203,7 +318,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
     ^
 `,
 		},
-		Test{
+		{
 			Body: "\"no end quote",
 			Expected: `Syntax Error GraphQL (1:14) Unterminated string.
 
@@ -211,7 +326,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
                 ^
 `,
 		},
-		Test{
+		{
 			Body: "\"contains unescaped \u0007 control char\"",
 			Expected: `Syntax Error GraphQL (1:21) Invalid character within String: "\\u0007".
 
@@ -219,7 +334,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
                        ^
 `,
 		},
-		Test{
+		{
 			Body: "\"null-byte is not \u0000 end of file\"",
 			Expected: `Syntax Error GraphQL (1:19) Invalid character within String: "\\u0000".
 
@@ -227,7 +342,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
                      ^
 `,
 		},
-		Test{
+		{
 			Body: "\"multi\nline\"",
 			Expected: `Syntax Error GraphQL (1:7) Unterminated string.
 
@@ -236,7 +351,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
 2: line"
 `,
 		},
-		Test{
+		{
 			Body: "\"multi\rline\"",
 			Expected: `Syntax Error GraphQL (1:7) Unterminated string.
 
@@ -245,7 +360,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
 2: line"
 `,
 		},
-		Test{
+		{
 			Body: "\"bad \\z esc\"",
 			Expected: `Syntax Error GraphQL (1:7) Invalid character escape sequence: \\z.
 
@@ -253,7 +368,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
          ^
 `,
 		},
-		Test{
+		{
 			Body: "\"bad \\x esc\"",
 			Expected: `Syntax Error GraphQL (1:7) Invalid character escape sequence: \\x.
 
@@ -261,7 +376,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
          ^
 `,
 		},
-		Test{
+		{
 			Body: "\"bad \\u1 esc\"",
 			Expected: `Syntax Error GraphQL (1:7) Invalid character escape sequence: \u1 es
 
@@ -269,7 +384,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
          ^
 `,
 		},
-		Test{
+		{
 			Body: "\"bad \\u0XX1 esc\"",
 			Expected: `Syntax Error GraphQL (1:7) Invalid character escape sequence: \u0XX1
 
@@ -277,7 +392,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
          ^
 `,
 		},
-		Test{
+		{
 			Body: "\"bad \\uXXXX esc\"",
 			Expected: `Syntax Error GraphQL (1:7) Invalid character escape sequence: \uXXXX
 
@@ -285,7 +400,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
          ^
 `,
 		},
-		Test{
+		{
 			Body: "\"bad \\uFXXX esc\"",
 			Expected: `Syntax Error GraphQL (1:7) Invalid character escape sequence: \uFXXX
 
@@ -293,7 +408,7 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
          ^
 `,
 		},
-		Test{
+		{
 			Body: "\"bad \\uXXXF esc\"",
 			Expected: `Syntax Error GraphQL (1:7) Invalid character escape sequence: \uXXXF
 
@@ -301,21 +416,40 @@ func TestLexReportsUsefulStringErrors(t *testing.T) {
          ^
 `,
 		},
+		{
+			Body: "\"bad \\u123",
+			Expected: `Syntax Error GraphQL (1:7) Invalid character escape sequence: \u123
+
+1: "bad \u123
+         ^
+`,
+		},
+		{
+			// some unicode chars take more than one column of text
+			// current implementation does not handle this
+			Body: "\"bфы世ыы𠱸d \\uXXXF esc\"",
+			Expected: `Syntax Error GraphQL (1:12) Invalid character escape sequence: \uXXXF
+
+1: "bфы世ыы𠱸d \uXXXF esc"
+              ^
+`,
+		},
 	}
 	for _, test := range tests {
 		_, err := Lex(createSource(test.Body))(0)
 		if err == nil {
-			t.Fatalf("unexpected nil error\nexpected:\n%v\n\ngot:\n%v", test.Expected, err)
+			t.Errorf("unexpected nil error\nexpected:\n%v\n\ngot:\n%v", test.Expected, err)
 		}
+
 		if err.Error() != test.Expected {
-			t.Fatalf("unexpected error.\nexpected:\n%v\n\ngot:\n%v", test.Expected, err.Error())
+			t.Errorf("unexpected error.\nexpected:\n%v\n\ngot:\n%v", test.Expected, err.Error())
 		}
 	}
 }
 
-func TestLexesNumbers(t *testing.T) {
+func TestLexer_LexesNumbers(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
 			Body: "4",
 			Expected: Token{
 				Kind:  TokenKind[INT],
@@ -324,7 +458,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "4",
 			},
 		},
-		Test{
+		{
 			Body: "4.123",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -333,7 +467,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "4.123",
 			},
 		},
-		Test{
+		{
 			Body: "-4",
 			Expected: Token{
 				Kind:  TokenKind[INT],
@@ -342,7 +476,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "-4",
 			},
 		},
-		Test{
+		{
 			Body: "9",
 			Expected: Token{
 				Kind:  TokenKind[INT],
@@ -351,7 +485,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "9",
 			},
 		},
-		Test{
+		{
 			Body: "0",
 			Expected: Token{
 				Kind:  TokenKind[INT],
@@ -360,7 +494,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "0",
 			},
 		},
-		Test{
+		{
 			Body: "-4.123",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -369,7 +503,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "-4.123",
 			},
 		},
-		Test{
+		{
 			Body: "0.123",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -378,7 +512,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "0.123",
 			},
 		},
-		Test{
+		{
 			Body: "123e4",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -387,7 +521,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "123e4",
 			},
 		},
-		Test{
+		{
 			Body: "123E4",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -396,7 +530,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "123E4",
 			},
 		},
-		Test{
+		{
 			Body: "123e-4",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -405,7 +539,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "123e-4",
 			},
 		},
-		Test{
+		{
 			Body: "123e+4",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -414,7 +548,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "123e+4",
 			},
 		},
-		Test{
+		{
 			Body: "-1.123e4",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -423,7 +557,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "-1.123e4",
 			},
 		},
-		Test{
+		{
 			Body: "-1.123E4",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -432,7 +566,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "-1.123E4",
 			},
 		},
-		Test{
+		{
 			Body: "-1.123e-4",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -441,7 +575,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "-1.123e-4",
 			},
 		},
-		Test{
+		{
 			Body: "-1.123e+4",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -450,7 +584,7 @@ func TestLexesNumbers(t *testing.T) {
 				Value: "-1.123e+4",
 			},
 		},
-		Test{
+		{
 			Body: "-1.123e4567",
 			Expected: Token{
 				Kind:  TokenKind[FLOAT],
@@ -463,17 +597,17 @@ func TestLexesNumbers(t *testing.T) {
 	for _, test := range tests {
 		token, err := Lex(createSource(test.Body))(0)
 		if err != nil {
-			t.Fatalf("unexpected error: %v, test: %s", err, test)
+			t.Errorf("unexpected error: %v, test: %s", err, test)
 		}
 		if !reflect.DeepEqual(token, test.Expected) {
-			t.Fatalf("unexpected token, expected: %v, got: %v, test: %v", test.Expected, token, test)
+			t.Errorf("unexpected token, expected: %v, got: %v, test: %v", test.Expected, token, test)
 		}
 	}
 }
 
-func TestLexReportsUsefulNumbeErrors(t *testing.T) {
+func TestLexer_ReportsUsefulNumberErrors(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
 			Body: "00",
 			Expected: `Syntax Error GraphQL (1:2) Invalid number, unexpected digit after 0: "0".
 
@@ -481,7 +615,7 @@ func TestLexReportsUsefulNumbeErrors(t *testing.T) {
     ^
 `,
 		},
-		Test{
+		{
 			Body: "+1",
 			Expected: `Syntax Error GraphQL (1:1) Unexpected character "+".
 
@@ -489,7 +623,7 @@ func TestLexReportsUsefulNumbeErrors(t *testing.T) {
    ^
 `,
 		},
-		Test{
+		{
 			Body: "1.",
 			Expected: `Syntax Error GraphQL (1:3) Invalid number, expected digit but got: <EOF>.
 
@@ -497,7 +631,7 @@ func TestLexReportsUsefulNumbeErrors(t *testing.T) {
      ^
 `,
 		},
-		Test{
+		{
 			Body: ".123",
 			Expected: `Syntax Error GraphQL (1:1) Unexpected character ".".
 
@@ -505,7 +639,7 @@ func TestLexReportsUsefulNumbeErrors(t *testing.T) {
    ^
 `,
 		},
-		Test{
+		{
 			Body: "1.A",
 			Expected: `Syntax Error GraphQL (1:3) Invalid number, expected digit but got: "A".
 
@@ -513,7 +647,7 @@ func TestLexReportsUsefulNumbeErrors(t *testing.T) {
      ^
 `,
 		},
-		Test{
+		{
 			Body: "-A",
 			Expected: `Syntax Error GraphQL (1:2) Invalid number, expected digit but got: "A".
 
@@ -521,7 +655,7 @@ func TestLexReportsUsefulNumbeErrors(t *testing.T) {
     ^
 `,
 		},
-		Test{
+		{
 			Body: "1.0e",
 
 			Expected: `Syntax Error GraphQL (1:5) Invalid number, expected digit but got: <EOF>.
@@ -530,7 +664,7 @@ func TestLexReportsUsefulNumbeErrors(t *testing.T) {
        ^
 `,
 		},
-		Test{
+		{
 			Body: "1.0eA",
 			Expected: `Syntax Error GraphQL (1:5) Invalid number, expected digit but got: "A".
 
@@ -542,17 +676,17 @@ func TestLexReportsUsefulNumbeErrors(t *testing.T) {
 	for _, test := range tests {
 		_, err := Lex(createSource(test.Body))(0)
 		if err == nil {
-			t.Fatalf("unexpected nil error\nexpected:\n%v\n\ngot:\n%v", test.Expected, err)
+			t.Errorf("unexpected nil error\nexpected:\n%v\n\ngot:\n%v", test.Expected, err)
 		}
 		if err.Error() != test.Expected {
-			t.Fatalf("unexpected error.\nexpected:\n%v\n\ngot:\n%v", test.Expected, err.Error())
+			t.Errorf("unexpected error.\nexpected:\n%v\n\ngot:\n%v", test.Expected, err.Error())
 		}
 	}
 }
 
-func TestLexesPunctuation(t *testing.T) {
+func TestLexer_LexesPunctuation(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
 			Body: "!",
 			Expected: Token{
 				Kind:  TokenKind[BANG],
@@ -561,7 +695,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "$",
 			Expected: Token{
 				Kind:  TokenKind[DOLLAR],
@@ -570,7 +704,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "(",
 			Expected: Token{
 				Kind:  TokenKind[PAREN_L],
@@ -579,7 +713,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: ")",
 			Expected: Token{
 				Kind:  TokenKind[PAREN_R],
@@ -588,7 +722,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "...",
 			Expected: Token{
 				Kind:  TokenKind[SPREAD],
@@ -597,7 +731,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: ":",
 			Expected: Token{
 				Kind:  TokenKind[COLON],
@@ -606,7 +740,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "=",
 			Expected: Token{
 				Kind:  TokenKind[EQUALS],
@@ -615,7 +749,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "@",
 			Expected: Token{
 				Kind:  TokenKind[AT],
@@ -624,7 +758,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "[",
 			Expected: Token{
 				Kind:  TokenKind[BRACKET_L],
@@ -633,7 +767,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "]",
 			Expected: Token{
 				Kind:  TokenKind[BRACKET_R],
@@ -642,7 +776,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "{",
 			Expected: Token{
 				Kind:  TokenKind[BRACE_L],
@@ -651,7 +785,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "|",
 			Expected: Token{
 				Kind:  TokenKind[PIPE],
@@ -660,7 +794,7 @@ func TestLexesPunctuation(t *testing.T) {
 				Value: "",
 			},
 		},
-		Test{
+		{
 			Body: "}",
 			Expected: Token{
 				Kind:  TokenKind[BRACE_R],
@@ -673,17 +807,17 @@ func TestLexesPunctuation(t *testing.T) {
 	for _, test := range tests {
 		token, err := Lex(createSource(test.Body))(0)
 		if err != nil {
-			t.Fatalf("unexpected error :%v, test: %v", err, test)
+			t.Errorf("unexpected error :%v, test: %v", err, test)
 		}
 		if !reflect.DeepEqual(token, test.Expected) {
-			t.Fatalf("unexpected token, expected: %v, got: %v, test: %v", test.Expected, token, test)
+			t.Errorf("unexpected token, expected: %v, got: %v, test: %v", test.Expected, token, test)
 		}
 	}
 }
 
-func TestLexReportsUsefulUnknownCharacterError(t *testing.T) {
+func TestLexer_ReportsUsefulUnknownCharacterError(t *testing.T) {
 	tests := []Test{
-		Test{
+		{
 			Body: "..",
 			Expected: `Syntax Error GraphQL (1:1) Unexpected character ".".
 
@@ -691,7 +825,7 @@ func TestLexReportsUsefulUnknownCharacterError(t *testing.T) {
    ^
 `,
 		},
-		Test{
+		{
 			Body: "?",
 			Expected: `Syntax Error GraphQL (1:1) Unexpected character "?".
 
@@ -699,7 +833,7 @@ func TestLexReportsUsefulUnknownCharacterError(t *testing.T) {
    ^
 `,
 		},
-		Test{
+		{
 			Body: "\u203B",
 			Expected: `Syntax Error GraphQL (1:1) Unexpected character "\\u203B".
 
@@ -707,7 +841,7 @@ func TestLexReportsUsefulUnknownCharacterError(t *testing.T) {
    ^
 `,
 		},
-		Test{
+		{
 			Body: "\u203b",
 			Expected: `Syntax Error GraphQL (1:1) Unexpected character "\\u203B".
 
@@ -715,19 +849,27 @@ func TestLexReportsUsefulUnknownCharacterError(t *testing.T) {
    ^
 `,
 		},
+		{
+			Body: "ф",
+			Expected: `Syntax Error GraphQL (1:1) Unexpected character "\\u0444".
+
+1: ф
+   ^
+`,
+		},
 	}
 	for _, test := range tests {
 		_, err := Lex(createSource(test.Body))(0)
 		if err == nil {
-			t.Fatalf("unexpected nil error\nexpected:\n%v\n\ngot:\n%v", test.Expected, err)
+			t.Errorf("unexpected nil error\nexpected:\n%v\n\ngot:\n%v", test.Expected, err)
 		}
 		if err.Error() != test.Expected {
-			t.Fatalf("unexpected error.\nexpected:\n%v\n\ngot:\n%v", test.Expected, err.Error())
+			t.Errorf("unexpected error.\nexpected:\n%v\n\ngot:\n%v", test.Expected, err.Error())
 		}
 	}
 }
 
-func TestLexRerportsUsefulInformationForDashesInNames(t *testing.T) {
+func TestLexer_ReportsUsefulInformationForDashesInNames(t *testing.T) {
 	q := "a-b"
 	lexer := Lex(createSource(q))
 	firstToken, err := lexer(0)
