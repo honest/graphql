@@ -13,7 +13,7 @@ type Params struct {
 	Schema Schema
 
 	// A GraphQL language formatted string representing the requested operation.
-	RequestString string
+	RequestString []byte
 
 	// The value provided as the first argument to resolver functions on the top
 	// level type (e.g. the query object type).
@@ -43,24 +43,18 @@ type Params struct {
 	ErrorHandlerFn func(err error)
 }
 
-var cachedASTs map[string]*ast.Document = make(map[string]*ast.Document)
-
 func Do(p Params) *Result {
 	var AST *ast.Document
-	var ok bool
 	var err error
-	if AST, ok = cachedASTs[p.RequestString]; !ok {
-		source := source.NewSource(&source.Source{
-			Body: p.RequestString,
-			Name: "GraphQL request",
-		})
-		AST, err = parser.Parse(parser.ParseParams{Source: source})
-		if err != nil {
-			return &Result{
-				Errors: gqlerrors.FormatErrors(err),
-			}
+	source := source.NewSource(&source.Source{
+		Body: p.RequestString,
+		Name: "GraphQL request",
+	})
+	AST, err = parser.Parse(parser.ParseParams{Source: source})
+	if err != nil {
+		return &Result{
+			Errors: gqlerrors.FormatErrors(err),
 		}
-		cachedASTs[p.RequestString] = AST
 	}
 
 	if !p.SkipValidation {
