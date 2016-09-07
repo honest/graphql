@@ -500,25 +500,31 @@ func resolveField(eCtx *ExecutionContext, parentType *Object, source interface{}
 	var returnType Output
 	defer func() (interface{}, resolveFieldResultState) {
 		if r := recover(); r != nil {
-
 			var err error
 			if r, ok := r.(string); ok {
 				err = NewLocatedError(
 					fmt.Sprintf("%v", r),
 					FieldASTsToNodeASTs(fieldASTs),
 				)
-			}
-			if eCtx.ErrorHandlerFn != nil {
-				eCtx.ErrorHandlerFn(err)
+
+				if eCtx.ErrorHandlerFn != nil {
+					eCtx.ErrorHandlerFn(err)
+				}
 			}
 
 			if r, ok := r.(error); ok {
+				if eCtx.ErrorHandlerFn != nil {
+					eCtx.ErrorHandlerFn(err)
+				}
+
 				err = gqlerrors.FormatError(r)
 			}
+
 			// send panic upstream
 			if _, ok := returnType.(*NonNull); ok {
 				panic(gqlerrors.FormatError(err))
 			}
+
 			eCtx.Errors = append(eCtx.Errors, gqlerrors.FormatError(err))
 
 			return result, resultState
