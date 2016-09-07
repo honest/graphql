@@ -513,11 +513,11 @@ func resolveField(eCtx *ExecutionContext, parentType *Object, source interface{}
 			}
 
 			if r, ok := r.(error); ok {
+
+				err = gqlerrors.FormatError(r)
 				if eCtx.ErrorHandlerFn != nil {
 					eCtx.ErrorHandlerFn(err)
 				}
-
-				err = gqlerrors.FormatError(r)
 			}
 
 			// send panic upstream
