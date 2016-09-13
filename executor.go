@@ -576,6 +576,7 @@ func resolveField(eCtx *ExecutionContext, parentType *Object, source interface{}
 	})
 
 	if resolveFnError != nil {
+		result = nil
 		panic(gqlerrors.FormatError(resolveFnError))
 	}
 
