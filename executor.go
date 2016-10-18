@@ -491,6 +491,10 @@ type resolveFieldResultState struct {
 	hasNoFieldDefs bool
 }
 
+type resolveError struct {
+	err error
+}
+
 // Resolves the field on the given source object. In particular, this
 // figures out the value that the field returns by calling its resolve function,
 // then calls completeValue to complete promises, serialize scalars, or execute
@@ -501,20 +505,19 @@ func resolveField(eCtx *ExecutionContext, parentType *Object, source interface{}
 	defer func() (interface{}, resolveFieldResultState) {
 		if r := recover(); r != nil {
 			var err error
-			if r, ok := r.(string); ok {
-				err = NewLocatedError(
-					fmt.Sprintf("%v", r),
-					FieldASTsToNodeASTs(fieldASTs),
-				)
-
+			switch rv := r.(type) {
+			case resolveError:
+				err = gqlerrors.FormatError(rv.err)
+			case error:
+				err = gqlerrors.FormatError(rv)
 				if eCtx.ErrorHandlerFn != nil {
 					eCtx.ErrorHandlerFn(err)
 				}
-			}
-
-			if r, ok := r.(error); ok {
-
-				err = gqlerrors.FormatError(r)
+			default:
+				err = NewLocatedError(
+					fmt.Sprintf("%v", rv),
+					FieldASTsToNodeASTs(fieldASTs),
+				)
 				if eCtx.ErrorHandlerFn != nil {
 					eCtx.ErrorHandlerFn(err)
 				}
@@ -577,7 +580,7 @@ func resolveField(eCtx *ExecutionContext, parentType *Object, source interface{}
 
 	if resolveFnError != nil {
 		result = nil
-		panic(gqlerrors.FormatError(resolveFnError))
+		panic(resolveError{err: resolveFnError})
 	}
 
 	completed := completeValueCatchingError(eCtx, returnType, fieldASTs, info, result)
